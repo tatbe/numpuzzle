@@ -52,6 +52,8 @@
             if (count > 1 && removeObj[0].children[1].text + removeObj[1].children[1].text == 10) {
                 stage.removeChild(removeObj[0]);
                 stage.removeChild(removeObj[1]);
+                gameStatus.point++;
+                $('#pointNum').text(gameStatus.point);
                 return false;
             } else if (count > 1 && removeObj[0].children[1].text + removeObj[1].children[1].text > 10) {
                 count = 0
