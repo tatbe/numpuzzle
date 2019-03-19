@@ -8,7 +8,9 @@
 </head>
 <body>
         <canvas id="myCanvas" width="500" height="500"></canvas>
-        <div>d:<span id="damageNum">0</span></div>
+        <div>point:<span id="pointNum">0</span></div>
+        <div>miss:<span id="missNum">0</span></div>
+        <div><span id="status"></span></div>
         <button id="start">start</button>
 
 </body>
@@ -17,6 +19,8 @@
     window.addEventListener("load", init);
     var stage;
     var gameStatus;
+    var interval_1;
+    var interval_2;
 
     let handleResize = () => {
         var w = window.innerWidth;
@@ -26,11 +30,12 @@
 
     let handleDown = (e) => {
         console.log(e);
-        createjs.Tween.removeTweens(e.target);
+        createjs.Tween.removeTweens(e.currentTarget);
+        stage.setChildIndex(e.target,(stage.getNumChildren())-1);
     }
     let handleMove = (e) => {
-        e.target.x = e.rawX;
-        e.target.y = e.rawY;
+        e.currentTarget.x = e.rawX;
+        e.currentTarget.y = e.rawY;
     } 
     let handleUp = (e) => {
         console.log(e);
@@ -38,22 +43,30 @@
         let removeObj = [];
         let count = 0;
         $.each(children, function(i, obj) {
-            if (obj.x -25 <= e.target.x && e.target.x <= obj.x +25
-                && obj.y -25 <= e.target.y && e.target.y <= obj.y +25
+            if (obj.x -25 <= e.currentTarget.x && e.currentTarget.x <= obj.x +25
+                && obj.y -25 <= e.currentTarget.y && e.currentTarget.y <= obj.y +25
              ) {
                 count++;
                 removeObj.push(obj);
             }
-            if (count > 1) {
+            if (count > 1 && removeObj[0].children[1].text + removeObj[1].children[1].text == 10) {
                 stage.removeChild(removeObj[0]);
                 stage.removeChild(removeObj[1]);
+                return false;
+            } else if (count > 1 && removeObj[0].children[1].text + removeObj[1].children[1].text > 10) {
+                count = 0
+                return false;
+            } else if (count > 1) {
+                removeObj[1].children[1].text = removeObj[0].children[1].text + removeObj[1].children[1].text
+                stage.removeChild(removeObj[0]);
+                count = 0
                 return false;
             }
         });
         if (count <= 1) {
             let range = stage.canvas.height;
-            createjs.Tween.get(e.target) // ターゲットを指定
-                .to({y: range + e.target.regY}, 10000 / (range + e.target.regY) * (range + e.target.regY - e.target.y));
+            createjs.Tween.get(e.currentTarget) // ターゲットを指定
+                .to({y: range + e.currentTarget.regY}, 5000 / (range + e.currentTarget.regY) * (range + e.currentTarget.regY - e.currentTarget.y));
         }
 
         
@@ -63,27 +76,52 @@
         let children = stage.children;
         let range = stage.canvas.height;
         $.each(children, function(i, obj) {
-            if (obj && obj.y >= range + obj.regY) {
+            if (obj && obj.y >= range + obj.regY) { // TODO:regYが０になってる
+                createjs.Tween.removeTweens(obj);
                 stage.removeChild(obj);
-                gameStatus.damage++;
+                gameStatus.miss++;
             }
         });
-        $("#damageNum").text(gameStatus.damage);
+        $("#missNum").text(gameStatus.miss);
+        if (gameStatus.miss >= 5) {
+            createjs.Ticker.paused = true;
+            clearInterval(interval_1);
+            clearInterval(interval_2);
+            $('#status').text('GAME OVER');
+        }
     }
 
     let createNum = (opt) => {
-        // 円のシェイプを作成
-        var bmp = new createjs.Bitmap("./numblock_5.png");
-        let w = stage.canvas.width;
-        bmp.x = opt.position * w / 5 + 25;
+        let cont = new createjs.Container();
+        stage.addChild(cont);
+        stage.setChildIndex(cont, 0);
 
-        bmp.regX = 25;
-        bmp.regY = 25;
-        stage.addChild(bmp);
+        let w = stage.canvas.width;
+        // 円オブジェクトの半径算出
+        let radius = w / 15;
+        cont.x = opt.position * w / 5 + radius;
+
+        // 円オブジェクト
+        let shape = new createjs.Shape();
+        shape.graphics.beginFill("#eeeeee");// 色
+        shape.graphics.beginStroke("#eeeeee");// 線の色
+        shape.graphics.setStrokeStyle(2);// 線の幅
+        shape.graphics.drawCircle(0, 0, radius);//半径 50px の円を描画
+        cont.addChild(shape);
+
+        // 数字決定
+        let numRand = Math.floor( Math.random() * 20);
+        let numArr = [1,1,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6];
+
+        // テキスト
+        let text = new createjs.Text(numArr[numRand], "25px serif", "#999999");
+        text.textAlign = "center";
+        text.textBaseline = "middle";
+        cont.addChild(text);
 
         let range = stage.canvas.height;
-        createjs.Tween.get(bmp) // ターゲットを指定
-                .to({y: range + bmp.regY}, 10000);
+        createjs.Tween.get(cont) // ターゲットを指定
+                .to({y: range + cont.regY}, 10000);
         // ステージを更新する
         createjs.Ticker.timingMode = createjs.Ticker.RAF;
         createjs.Ticker.addEventListener("tick", handleTick);
@@ -92,17 +130,52 @@
             stage.update();
         }
 
-        bmp.addEventListener("mousedown", handleDown);
-        bmp.addEventListener("pressmove", handleMove);
-        bmp.addEventListener("pressup", handleUp);
+        cont.addEventListener("mousedown", handleDown);
+        cont.addEventListener("pressmove", handleMove);
+        cont.addEventListener("pressup", handleUp);
     }
 
     let play = () => {
-        setInterval(() => {
-            var opt = {};
+        let count = 0;
+        // interval = setInterval(() => {
+            // var speed = 2000;
+
+            // if (count >= 8 && count <= 16) {
+            //     speed = 1500;
+            // } else if (count >= 17 && count <= 32) {
+            //     speed = 1000;
+            // }
+
+            // gameStatus.speed = speed;
+            
+
+        // }, 2000);
+
+        count++;
+        interval_2 = setInterval(() => {
+            let opt = {};
             opt.position = Math.floor( Math.random() * 5 );
-            createNum(opt)
+            createNum(opt);
         }, 2000);
+        interval_1 = setInterval(() => {
+            if (count == 1) {
+                count++;
+                clearInterval(interval_2);
+                interval_2 = setInterval(() => {
+                    let opt = {};
+                    opt.position = Math.floor( Math.random() * 5 );
+                    createNum(opt);
+                }, 1700);
+            } else if (count == 2) {
+                count++;
+                clearInterval(interval_2);
+                interval_2 = setInterval(() => {
+                    let opt = {};
+                    opt.position = Math.floor( Math.random() * 5 );
+                    createNum(opt);
+                }, 1200);
+            }
+        }, 10000);
     }
 
     function init() {
@@ -114,7 +187,9 @@
         }
         handleResize();
         gameStatus = {
-            damage: 0
+            point: 0,
+            miss: 0,
+            speed: 2000
         };
         $("#start").click(() => {
             play();
